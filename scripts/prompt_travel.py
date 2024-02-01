@@ -14,7 +14,7 @@ from functools import partial
 from typing import List, Tuple, Callable, Union, Optional, Generic, TypeVar
 from traceback import print_exc, format_exc
 from torchmetrics import StructuralSimilarityIndexMeasure
-from torchvision import transforms as T
+from torchvision import transforms as Tr
 
 import gradio as gr
 import numpy as np
@@ -839,11 +839,11 @@ class Script(scripts.Script):
 
         ssim = StructuralSimilarityIndexMeasure(data_range=1.0)
         if ssim_ccrop == 0:
-            transform = T.ToTensor()
+            transform = Tr.ToTensor()
         else:
-            transform = T.Compose([
-                T.CenterCrop((p.height * (ssim_ccrop / 100), p.width * (ssim_ccrop / 100))),
-                T.ToTensor(),
+            transform = Tr.Compose([
+                Tr.CenterCrop((p.height * (ssim_ccrop / 100), p.width * (ssim_ccrop / 100))),
+                Tr.ToTensor(),
             ])
 
         check = True
