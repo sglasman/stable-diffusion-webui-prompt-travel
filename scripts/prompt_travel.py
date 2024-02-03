@@ -870,45 +870,49 @@ class Script(scripts.Script):
                 d = ssim(a, b)
 
                 if d < ssim_diff and (dists[i + 1] - dists[i]) > substep_min:
-                    print(f"SSIM: {dists[i]} <-> {dists[i+1]} = ({dists[i+1] - dists[i]}) {d}")
-
-                    # Add image and run check again
+                    closeness = 1
+                    success = False
                     check = True
+                    print(f"SSIM: {dists[i]} <-> {dists[i+1]} = ({dists[i+1] - dists[i]}) {d}")
+                    while success == False && ((dists[i+1] - dists[i]) / 2.0**closeness > substep_min) :
+            
+                        new_dist = dists[i] + (dists[i + 1] - dists[i]) / 2.0**closeness
+    
+                        self.interpolate(
+                            lerp_fn=lerp_fn,
+                            from_pos_hidden=from_pos_hidden,
+                            from_neg_hidden=from_neg_hidden,
+                            to_pos_hidden=to_pos_hidden,
+                            to_neg_hidden=to_neg_hidden,
+                            inter_pos_hidden=inter_pos_hidden,
+                            inter_neg_hidden=inter_neg_hidden,
+                            alpha=new_dist,
+                        )
+                        with on_cfg_denoiser_wrapper(
+                            partial(set_cond_callback, [inter_pos_hidden, inter_neg_hidden])
+                        ):
+                            # SSIM stats for the new image
+                            print(f"Process: {new_dist}")
+                            image = process_p(append=False)[0]
+    
+                        c_img = image
+                        # Check if this was an improvment
+                        if self.ssim_blur > 0:
+                            c_img: PILImage = image.filter(ImageFilter.GaussianBlur(radius=self.ssim_blur))
+                        
+                        c = transform(c_img).unsqueeze(0)
+                        d2 = ssim(a, c)
+    
+                        if d2 > d:
+                            # Keep image if it is improvment
+                            success = True
+                            #scribble_debug(image, f"{i+1}:{new_dist}")
+                            prompt_images.insert(i + 1, image)
+                            dists.insert(i + 1, new_dist)
+                        else:
+                            closeness += 1
 
-                    new_dist = (dists[i] + dists[i + 1]) / 2.0
-
-                    self.interpolate(
-                        lerp_fn=lerp_fn,
-                        from_pos_hidden=from_pos_hidden,
-                        from_neg_hidden=from_neg_hidden,
-                        to_pos_hidden=to_pos_hidden,
-                        to_neg_hidden=to_neg_hidden,
-                        inter_pos_hidden=inter_pos_hidden,
-                        inter_neg_hidden=inter_neg_hidden,
-                        alpha=new_dist,
-                    )
-                    with on_cfg_denoiser_wrapper(
-                        partial(set_cond_callback, [inter_pos_hidden, inter_neg_hidden])
-                    ):
-                        # SSIM stats for the new image
-                        print(f"Process: {new_dist}")
-                        image = process_p(append=False)[0]
-
-                    c_img = image
-                    # Check if this was an improvment
-                    if self.ssim_blur > 0:
-                        c_img: PILImage = image.filter(ImageFilter.GaussianBlur(radius=self.ssim_blur))
-                    
-                    c = transform(c_img).unsqueeze(0)
-                    d2 = ssim(a, c)
-
-                    if d2 > d or d2 < ssim_diff * ssim_diff_min / 100.0:
-                        # Keep image if it is improvment or hasn't reached desired min ssim_diff
-                        #scribble_debug(image, f"{i+1}:{new_dist}")
-                        prompt_images.insert(i + 1, image)
-                        dists.insert(i + 1, new_dist)
-
-                    else:
+                    if not success:
                         print(f"Did not find improvment: {d2} < {d} ({d-d2}) Taking shortcut.")
                         not_better += 1
                         done = i + 1
