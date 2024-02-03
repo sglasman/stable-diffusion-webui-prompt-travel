@@ -453,9 +453,6 @@ class Script(scripts.Script):
                 label="SSIM CenterCrop%", value=0, minimum=0, maximum=100, step=1
             )
             substep_min = gr.Number(label="SSIM minimum step", value=0.0001)
-            ssim_diff_min = gr.Slider(
-                label="SSIM min threshold", value=75, minimum=0, maximum=100, step=1
-            )
             ssim_blur = gr.Slider(
                 label="SSIM blur (helps with images featuring many small changing details)", value=0, minimum=0, maximum=20, step=1
             )
@@ -466,7 +463,7 @@ class Script(scripts.Script):
             depth_img,
             video_fmt, video_fps, video_pad, video_pick,
             ext_video, ext_depth,
-            ssim_diff, ssim_ccrop, substep_min, ssim_diff_min, ssim_blur,
+            ssim_diff, ssim_ccrop, substep_min, ssim_blur,
         ]
 
     def run(self, p:Processing, 
@@ -475,7 +472,7 @@ class Script(scripts.Script):
             depth_img:PILImage,
             video_fmt:str, video_fps:float, video_pad:int, video_pick:str,
             ext_video:bool, ext_depth:bool,
-            ssim_diff:float, ssim_ccrop:int, substep_min:float, ssim_diff_min:int, ssim_blur:int,
+            ssim_diff:float, ssim_ccrop:int, substep_min:float, ssim_blur:int,
         ):
         
         # enum lookup
@@ -563,7 +560,6 @@ class Script(scripts.Script):
         self.ssim_diff      = ssim_diff
         self.ssim_ccrop     = ssim_ccrop
         self.substep_min    = substep_min
-        self.ssim_diff_min  = ssim_diff_min
         self.ssim_blur      = ssim_blur
 
         # Dispatch
@@ -664,7 +660,6 @@ class Script(scripts.Script):
                     p=self.p,
                     ssim_diff=self.ssim_diff,
                     ssim_ccrop=self.ssim_ccrop,
-                    ssim_diff_min=self.ssim_diff_min,
                     substep_min=self.substep_min,
                     prompt_images=self.images[-(n_inter + 1) :],
                     lerp_fn=lerp_fn,
@@ -820,7 +815,6 @@ class Script(scripts.Script):
         p,
         ssim_diff,
         ssim_ccrop,
-        ssim_diff_min,
         substep_min,
         prompt_images,
         lerp_fn,
@@ -903,12 +897,12 @@ class Script(scripts.Script):
                         c = transform(c_img).unsqueeze(0)
                         d2 = ssim(a, c)
     
-                        if d2 > d:
-                            # Keep image if it is improvment
-                            success = True
-                            #scribble_debug(image, f"{i+1}:{new_dist}")
+                        if d2 > ssim_diff or ((dists[i+1] - dists[i]) / 2.0**(closeness + 1) < substep_min):
+                            # Keep image if it is close enough, or step is almost too small
+                            if d2 > ssim_diff: success = True
                             prompt_images.insert(i + 1, image)
                             dists.insert(i + 1, new_dist)
+                            done = i + 1
                         else:
                             closeness += 1
 
