@@ -851,6 +851,8 @@ class Script(scripts.Script):
             if state.interrupted: break
 
             check = False
+            if 'next_step' in locals(): next_step = min(2 * next_step, (dists[done + 1] - dists[done]) / 2.0)
+            else: next_step = (dists[done + 1] - dists[done]) / 2.0
             for i in range(done, len(prompt_images) - 1):
                 a_img: PILImage = prompt_images[i]
                 b_img: PILImage = prompt_images[i + 1]
@@ -864,13 +866,12 @@ class Script(scripts.Script):
                 d = ssim(a, b)
 
                 if d < ssim_diff and (dists[i + 1] - dists[i]) > substep_min:
+                    print(f"Starting search at index ${i}")
                     closeness = 1
                     success = False
                     check = True
                     print(f"SSIM: {dists[i]} <-> {dists[i+1]} = ({dists[i+1] - dists[i]}) {d}")
-                    while success == False && ((dists[i+1] - dists[i]) / 2.0**closeness > substep_min) :
-            
-                        new_dist = dists[i] + (dists[i + 1] - dists[i]) / 2.0**closeness
+                    while success == False and (next_step > substep_min) :
     
                         self.interpolate(
                             lerp_fn=lerp_fn,
@@ -880,13 +881,13 @@ class Script(scripts.Script):
                             to_neg_hidden=to_neg_hidden,
                             inter_pos_hidden=inter_pos_hidden,
                             inter_neg_hidden=inter_neg_hidden,
-                            alpha=new_dist,
+                            alpha=dists[i]+next_step,
                         )
                         with on_cfg_denoiser_wrapper(
                             partial(set_cond_callback, [inter_pos_hidden, inter_neg_hidden])
                         ):
                             # SSIM stats for the new image
-                            print(f"Process: {new_dist}")
+                            print(f"Process: {dists[i]+next_step}")
                             image = process_p(append=False)[0]
     
                         c_img = image
@@ -897,15 +898,20 @@ class Script(scripts.Script):
                         c = transform(c_img).unsqueeze(0)
                         d2 = ssim(a, c)
     
-                        if d2 > ssim_diff or ((dists[i+1] - dists[i]) / 2.0**(closeness + 1) < substep_min):
+                        if d2 > ssim_diff or ((next_step / 2.0) < substep_min):
                             # Keep image if it is close enough, or step is almost too small
-                            if d2 > ssim_diff: success = True
+                            if d2 > ssim_diff: 
+                                success = True
+                                print(f"Succeeded in getting a close enough image at {i}; step {next_step}; moving on")
+                            else: 
+                                print(f"Step getting too small, step: {next_step}")
                             prompt_images.insert(i + 1, image)
-                            dists.insert(i + 1, new_dist)
+                            dists.insert(i + 1, dists[i] + next_step)
                             done = i + 1
                         else:
-                            closeness += 1
-
+                            print(f"Next step decreasing to ${next_step / 2.0}")
+                            next_step = next_step / 2.0
+                            
                     if not success:
                         print(f"Did not find improvment: {d2} < {d} ({d-d2}) Taking shortcut.")
                         not_better += 1
