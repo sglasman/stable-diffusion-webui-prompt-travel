@@ -905,6 +905,7 @@ class Script(scripts.Script):
                                 print(f"Succeeded in getting a close enough image at {i}; step {next_step}; moving on")
                             else: 
                                 print(f"Step getting too small, step: {next_step}")
+                                next_step = next_step / 2.0
                             prompt_images.insert(i + 1, image)
                             dists.insert(i + 1, dists[i] + next_step)
                             done = i + 1
